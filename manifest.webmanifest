@@ -1,0 +1,15 @@
+{
+  "name": "尾文字Z — 峠ドリフトレース",
+  "short_name": "尾文字Z",
+  "description": "無料で遊べる3D峠ドリフトレースゲーム。最大8人オンライン対戦対応。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b0e12",
+  "theme_color": "#0d1114",
+  "icons": [
+    { "src": "omz-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

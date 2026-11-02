@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://uni-tadayasu.github.io/initial-d.github.io/sitemap.xml

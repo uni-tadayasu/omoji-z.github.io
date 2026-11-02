@@ -1,0 +1,17 @@
+{
+  "name": "峠ドライブ",
+  "revisionLabel": "峠攻略と継続対戦を次の柱へ",
+  "description": "ユーザー所有の参照ブラウザゲームをもとに、車・コース・UIの再現度を高めたレースゲームを制作する。原作の雰囲気を保ち、車の加速、ブレーキ、ハンドリング、路面やコースに応じた挙動を感じられるリアルな走行感をコアにする。",
+  "mode": "Universal",
+  "exportDate": "2026-11-02T07:54:29.729Z",
+  "rosebudBuiltInSplash": {
+    "present": true,
+    "version": 1
+  },
+  "assetCount": 9,
+  "assetTypes": [
+    "image",
+    "audio",
+    "model"
+  ]
+}
