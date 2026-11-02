@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180"><rect width="180" height="180" fill="#1b1d1f"/><rect x="9" y="9" width="162" height="162" fill="none" stroke="#efe6d2" stroke-width="2.5"/><text x="20" y="140" font-family="'Noto Serif JP','Yu Mincho','Hiragino Mincho ProN',serif" font-size="108" font-weight="700" fill="#efe6d2">尾</text><text x="118" y="140" font-family="Arial,Helvetica,sans-serif" font-size="58" font-weight="900" fill="#e8553a">z</text><rect x="9" y="150" width="70" height="12" fill="#e8553a"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <rect width="180" height="180" fill="#1b1d1f"/>
+  <rect x="9" y="9" width="162" height="162" fill="none" stroke="#efe6d2" stroke-width="3"/>
+  <g fill="#f4ecdc">
+    <!-- 尸 -->
+    <path d="M36 30 L104 30 L110 25 L117 33 L111 36 L111 62 L103 62 L103 38 L44 38 L44 54 L103 54 L103 61 L44 61 L44 92 Q42 124 22 146 L17 142 Q35 120 36 90 Z"/>
+    <!-- 毛 -->
+    <path d="M52 78 L104 68 L110 64 L114 72 L106 75 L52 85 Z"/>
+    <path d="M50 93 L106 88 L112 84 L116 91 L50 100 Z"/>
+    <path d="M47 112 L110 104 L116 100 L120 107 L47 119 Z"/>
+    <path d="M75 74 L83 72 L83 128 Q83 134 90 134 L116 134 L117 122 L122 122 L121 142 L88 142 Q75 142 75 130 Z"/>
+  </g>
+  <path d="M126 104 L160 104 L160 112 L138 136 L161 136 L161 145 L124 145 L124 137 L146 113 L126 113 Z" fill="#e8553a"/>
+  <rect x="9" y="152" width="96" height="11" fill="#e8553a"/>
+</svg>

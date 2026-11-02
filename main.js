@@ -310,9 +310,37 @@ function readInput() {
 }
 
 // ---------- Audio ----------
-const bgm = new Audio('assets/audio/eurobeat-bgm.mp3');
-bgm.loop = true;
+// race playlist: shuffled, each track plays through then the next one starts
+const RACE_TRACKS = ['assets/audio/eurobeat-bgm.mp3', 'assets/audio/race-bgm-1.mp3', 'assets/audio/race-bgm-2.mp3', 'assets/audio/race-bgm-3.mp3', 'assets/audio/race-bgm-4.mp3', 'assets/audio/race-bgm-5.mp3', 'assets/audio/race-bgm-6.mp3', 'assets/audio/race-bgm-7.mp3', 'assets/audio/race-bgm-8.mp3'];
+let playlist = [];
+const bgm = new Audio();
 bgm.volume = 0.45;
+bgm.addEventListener('ended', () => { if (state !== 'menu') nextRaceTrack(); });
+function nextRaceTrack() {
+    if (!playlist.length) {
+        playlist = RACE_TRACKS.slice().sort(() => Math.random() - 0.5);
+        if (playlist[0] === bgm.dataset.src && playlist.length > 1) playlist.push(playlist.shift());
+    }
+    const src = playlist.shift();
+    bgm.dataset.src = src;
+    bgm.src = src;
+    if (!muted) bgm.play().catch(() => {});
+}
+const menuBgm = new Audio('assets/audio/menu-bgm.mp3');
+menuBgm.loop = true;
+menuBgm.volume = 0.35;
+function playMenuBgm() {
+    if (muted || state !== 'menu') return;
+    menuBgm.play().catch(() => {});
+}
+// browsers need a gesture before audio; start menu music on the first one
+const unlockMenu = () => {
+    try { playMenuBgm(); } catch (e) { menuBgm.play().catch(() => {}); } // state may not be initialised yet during loading
+    window.removeEventListener('pointerdown', unlockMenu);
+    window.removeEventListener('keydown', unlockMenu);
+};
+window.addEventListener('pointerdown', unlockMenu);
+window.addEventListener('keydown', unlockMenu);
 const squeal = new Audio('assets/audio/tire-squeal.mp3');
 squeal.loop = true;
 squeal.volume = 0;
@@ -373,6 +401,7 @@ function playChime(gem) {
 function toggleMute() {
     muted = !muted;
     bgm.muted = muted;
+    menuBgm.muted = muted;
     squeal.muted = muted;
 }
 function updateAudio() {
@@ -660,16 +689,15 @@ function startRace(newCfg) {
     document.getElementById('result').classList.add('hidden');
     showSite(false);
     initAudio();
-    if (!muted) {
-        bgm.currentTime = 0;
-        bgm.play().catch(() => {});
-    }
+    menuBgm.pause();
+    nextRaceTrack();
 }
 
 function backToMenu() {
     state = 'menu';
     bgm.pause();
     squeal.pause();
+    playMenuBgm();
     clearCoins();
     ui.center.textContent = '';
     document.getElementById('result').classList.add('hidden');
