@@ -183,6 +183,9 @@
       #progress { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); width: 12px; height: 260px; background: rgba(255,255,255,.12); border: 2px solid #fff6; }
       .talk .line { font-size: 17px; padding: 10px 14px; margin: 8px 0; background: #0b0f14; border-left: 3px solid var(--ac); border-radius: 4px; }
       .resline { font-size: 13px; line-height: 1.6; margin: 8px 0; max-height: 34vh; overflow: auto; }
+      .synckey { font-family: Orbitron, monospace; font-size: clamp(20px, 4vw, 30px); letter-spacing: 3px; color: var(--gold); background: #0b0f14; border: 1px dashed var(--gold); border-radius: 8px; padding: 12px; text-align: center; margin: 6px 0; user-select: all; }
+      #impText { width: 100%; background: #0b0f14; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-family: monospace; font-size: 12px; }
+      .filebtn { display: inline-flex; align-items: center; padding: 9px 14px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
       .member { padding: 6px 8px; border-bottom: 1px solid var(--line); } .member.me b { color: var(--gold); }
       .ev.bonus-metal { border-color: #3fb8d8; } .ev.bonus-jackpot { border-color: var(--gold); }
       .dot { position: absolute; left: -6px; width: 20px; height: 8px; border-radius: 3px; }
@@ -301,7 +304,7 @@
     </div>
     <div id="site">
       <header><div id="brand"><img src="omz-icon.svg" alt="尾文字Z ロゴ" width="28" height="28">尾文字<em>Z</em></div><div class="bal"><span id="zBal">0 Z</span><span id="mBal">0 M</span></div></header>
-      <nav id="nav"><button data-go="home">ホーム</button><button data-go="story">ストーリー</button><button data-go="gp">グランプリ</button><button data-go="bonus">ボーナス</button><button data-go="online">オンライン</button><button data-go="race">レース</button><button data-go="events">イベント</button><button data-go="garage">ガレージ</button><button data-go="shop">ショップ</button><button data-go="premium">プレミアム</button><button data-go="tune">チューニング</button><button data-go="dress">ドレスアップ</button><button data-go="howto">遊び方</button></nav>
+      <nav id="nav"><button data-go="home">ホーム</button><button data-go="story">ストーリー</button><button data-go="gp">グランプリ</button><button data-go="bonus">ボーナス</button><button data-go="online">オンライン</button><button data-go="race">レース</button><button data-go="events">イベント</button><button data-go="garage">ガレージ</button><button data-go="shop">ショップ</button><button data-go="premium">プレミアム</button><button data-go="tune">チューニング</button><button data-go="dress">ドレスアップ</button><button data-go="sync">データ連携</button><button data-go="howto">遊び方</button></nav>
       <main id="content">
         <article class="panel">
           <h1>尾文字Z（おもじZ）— 無料ブラウザ峠ドリフトレースゲーム</h1>

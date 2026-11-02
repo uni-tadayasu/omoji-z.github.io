@@ -1,6 +1,7 @@
 import { getCar, CAR_COUNT, MAKERS, COUNTRY, VIP, getCourse, COURSE_COUNT, REGIONS, PER_REGION, TIME_LABEL, WEATHER_LABEL, weekId, weekEvents, weekEndsAt, hpPerTon, rankOf, BONUS, GRANDPRIX, GP_POINTS, STORY, CPU_NAMES } from './data.js';
 import { save, persist, carState, owns } from './save.js';
 import { UPGRADES, PARTS, MAX_LV, MAX_LB, upgradeCost, limitBreakCost, allMaxed, effectiveStats, tuneProgress } from './tuning.js';
+import { syncState, onSyncStatus, onRemoteApplied, newSyncKey, normalizeKey, startSync, stopSync, syncNow, exportCode, importCode, downloadSave } from './sync.js';
 import { carSVG, BODY_COLORS, PREMIUM_COLORS, WINGS, NEONS, WHEELS } from './visuals.js';
 
 const $ = s => document.querySelector(s);
@@ -325,6 +326,35 @@ const PAGES = {
           <p class="note">誰かがスタートを押すと、ルームの全員が同じコースで同時にカウントダウンを始めます。</p>
         </div></div>`;
     },
+    sync() {
+        const key = save.syncKey;
+        const S = { off: '⚪ オフ', connecting: '🟡 接続中…', pending: '🟡 送信待ち', synced: '🟢 同期済み', error: '🔴 エラー' };
+        return `<h2 class="pt">データ連携 <small>スマホ・PC・タブレット間で引き継ぎ</small></h2>
+        <div class="split">
+          <div class="panel">
+            <h3>☁ 自動連携（おすすめ）</h3>
+            <p class="note">「連携キー」を発行すると、進行状況が自動でクラウドに保存され、同じキーを入力した他の端末とリアルタイムに同期されます。</p>
+            <div class="kv"><span>状態</span><b id="syncStatus">${S[syncState.status] || syncState.status}${syncState.error ? ' ' + esc(syncState.error) : ''}</b></div>
+            ${key ? `<div class="sectionT">あなたの連携キー</div>
+              <div class="synckey">${esc(key)}</div>
+              <p class="note">⚠ このキーを知っている人はデータを読み書きできます。他人に教えないでください。</p>
+              <div class="row"><button class="primary" id="copyKey">📋 キーをコピー</button><button class="ghost" id="syncNow">⟳ 今すぐ同期</button><button class="ghost" id="syncOff">連携を解除</button></div>`
+            : `<button class="primary big wide" id="syncCreate">🔑 連携キーを発行（この端末のデータをアップロード）</button>`}
+            <div class="sectionT">別の端末のデータをこの端末に読み込む</div>
+            <div class="row"><input id="syncKeyIn" placeholder="XXXX-XXXX-XXXX" maxlength="14"><button class="primary" id="syncLink">連携する</button></div>
+            <p class="note">※ 連携すると、この端末のデータはクラウドのデータで上書きされます。</p>
+          </div>
+          <div class="panel">
+            <h3>✍ 手動連携（引き継ぎコード）</h3>
+            <p class="note">オフラインでも使えます。コードをコピーして、別の端末の「読み込み」に貼り付けてください。</p>
+            <div class="row"><button class="primary" id="expCopy">📋 引き継ぎコードをコピー</button><button class="ghost" id="expFile">💾 ファイルで保存</button></div>
+            <div class="sectionT">コード / ファイルから読み込み</div>
+            <textarea id="impText" rows="4" placeholder="OMZ1:... を貼り付け"></textarea>
+            <div class="row"><button class="primary" id="impBtn">読み込む</button><label class="ghost filebtn">📂 ファイルを選択<input type="file" id="impFile" accept=".json,application/json" hidden></label></div>
+            <p class="note">※ 読み込むと現在のデータは上書きされます。自動連携中なら他の端末にも反映されます。</p>
+          </div>
+        </div>`;
+    },
     howto() {
         return `<h2 class="pt">遊び方</h2><div class="panel howto">
         <h3>操作方法（PC）</h3><p><kbd>W</kbd>/<kbd>↑</kbd> アクセル　<kbd>S</kbd>/<kbd>↓</kbd> ブレーキ・バック　<kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> ハンドル</p>
@@ -428,6 +458,26 @@ function onClick(e) {
         persist();
         return api.online.start({ courseIdx: st.course, cpus: st.onCpus, level: LEVELS[st.level].v });
     }
+    if (b.id === 'syncCreate') { const k = newSyncKey(); startSync(k, 'push').then(ok => { toast(ok ? '連携キーを発行しました' : '接続に失敗しました'); render(); }); return render(); }
+    if (b.id === 'copyKey') { navigator.clipboard?.writeText(save.syncKey).then(() => toast('キーをコピーしました'), () => toast(save.syncKey)); return; }
+    if (b.id === 'syncNow') { syncNow(); return toast('同期しました'); }
+    if (b.id === 'syncOff') { if (confirm('連携を解除しますか？（この端末のデータは残ります）')) { stopSync(true); render(); } return; }
+    if (b.id === 'syncLink') {
+        const k = normalizeKey($('#syncKeyIn').value);
+        if (!k) return toast('キーの形式が正しくありません');
+        if (!confirm('この端末のデータをクラウドのデータで上書きします。よろしいですか？')) return;
+        startSync(k, 'pull').then(ok => { toast(ok ? '✅ データを引き継ぎました' : '連携に失敗しました'); render(); });
+        return;
+    }
+    if (b.id === 'expCopy') { const c = exportCode(); navigator.clipboard?.writeText(c).then(() => toast('引き継ぎコードをコピーしました'), () => { $('#impText').value = c; toast('下の欄のコードをコピーしてください'); }); return; }
+    if (b.id === 'expFile') return downloadSave();
+    if (b.id === 'impBtn') {
+        const t = $('#impText').value;
+        if (!t.trim()) return toast('コードを貼り付けてください');
+        if (!confirm('現在のデータを上書きします。よろしいですか？')) return;
+        try { importCode(t); toast('✅ 読み込みました'); render(); } catch (err) { toast('コードが正しくありません'); }
+        return;
+    }
     if (d.event) {
         const ev = weekEvents().find(x => x.id === d.event);
         return api.startRace({ courseIdx: ev.courseIdx, mode: ev.type, level: ev.level, event: ev });
@@ -485,6 +535,13 @@ function onChange(e) {
     if (t.id === 'fMaker') { st.maker = t.value; st.shopPage = 0; render(); }
     if (t.id === 'fRank') { st.rank = t.value; st.shopPage = 0; render(); }
     if (t.id === 'fSort') { st.sort = t.value; st.shopPage = 0; render(); }
+    if (t.id === 'impFile' && t.files && t.files[0]) {
+        t.files[0].text().then(txt => {
+            if (!confirm('現在のデータを上書きします。よろしいですか？')) return;
+            try { importCode(txt); toast('✅ 読み込みました'); render(); } catch (err) { toast('ファイルが正しくありません'); }
+        });
+        return;
+    }
     if (t.id === 'q') { st.q = t.value; st.shopPage = 0; render(); }
 }
 
@@ -500,6 +557,14 @@ export function initUI(a) {
         if (el) el.innerHTML = membersHTML();
         const n = $('#memCount');
         if (n) n.textContent = api.online.members().length;
+    });
+    onSyncStatus(() => {
+        const el = $('#syncStatus');
+        if (el) el.textContent = ({ off: '⚪ オフ', connecting: '🟡 接続中…', pending: '🟡 送信待ち', synced: '🟢 同期済み', error: '🔴 エラー' }[syncState.status] || '') + (syncState.error ? ' ' + syncState.error : '');
+    });
+    onRemoteApplied(() => {
+        header();
+        if (!$('#site').classList.contains('hidden') && !['sync', 'online'].includes(page)) render();
     });
     st.region = Math.floor(st.course / PER_REGION);
     st.coursePage = Math.floor((st.course % PER_REGION) / 20);

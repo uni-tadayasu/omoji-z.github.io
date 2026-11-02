@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { init, id } from '@instantdb/core';
-import { INSTANT_DB_APP_ID } from './instant_db_config.js';
+import { id } from '@instantdb/core';
+import { db as sharedDb } from './sync.js';
 import { buildTrack } from './track.js';
 import { Car, RivalCar, prepareModel } from './car.js';
 import { getCourse, courseControlPoints, CPU_NAMES } from './data.js';
@@ -392,7 +392,7 @@ function updateAudio() {
 export const MAX_PLAYERS = 8;
 const params = new URLSearchParams(window.location.search);
 const myId = id();
-let db = null;
+const db = sharedDb;
 let room = null;
 let unsubPresence = null;
 let roomCode = params.get('room') || 'public';
@@ -400,11 +400,6 @@ const peers = new Map(); // key -> { data, group?, target, heading }
 let lastGoRid = null;
 let myGo = null;
 let onLobbyChange = () => {};
-try {
-    db = init({ appId: INSTANT_DB_APP_ID });
-} catch (e) {
-    db = null;
-}
 function joinRoom(code) {
     if (!db) return false;
     try {

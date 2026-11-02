@@ -12,8 +12,23 @@ function load() {
     return fresh();
 }
 export const save = load();
-export function persist() {
+let persistHook = null;
+export function setPersistHook(fn) { persistHook = fn; }
+function writeLocal() {
     try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+}
+export function persist() {
+    save.updatedAt = Date.now();
+    writeLocal();
+    if (persistHook) persistHook();
+}
+// replace whole save in place (used by sync/import); does not trigger an upload
+export function replaceSave(data) {
+    if (data !== save) {
+        for (const k of Object.keys(save)) delete save[k];
+        Object.assign(save, fresh(), data);
+    }
+    writeLocal();
 }
 export function carState(id) {
     if (!save.cars[id]) save.cars[id] = { upg: {}, parts: {}, lb: 0, dress: { body: null, wing: 0, neon: null, wheel: 0 } };
