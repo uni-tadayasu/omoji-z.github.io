@@ -11,6 +11,21 @@ const CONTROL = [
     [0, 36, -650], [-40, 32, -720], [-20, 28, -800], [-20, 27, -840]
 ];
 
+let glowTex = null;
+function glowTexture() {
+    if (glowTex) return glowTex;
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    glowTex = new THREE.CanvasTexture(c);
+    return glowTex;
+}
+
 function ribbon(track, offA, offB, yA, yB, vScale) {
     const { pts, sides, ds } = track;
     const pos = [];
@@ -159,7 +174,7 @@ export function buildTrack(rootScene, roadTex, grassTex, control = CONTROL, opts
     scene.add(posts);
 
     // Pine trees
-    const treeCount = 900;
+    const treeCount = 600;
     const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.3, 2), new THREE.MeshStandardMaterial({ color: 0x3a2a1a }), treeCount);
     const leaves = new THREE.InstancedMesh(new THREE.ConeGeometry(2, 7, 7), new THREE.MeshStandardMaterial({ color: 0x1d3a24, roughness: 1 }), treeCount);
     let placed = 0;
@@ -170,7 +185,7 @@ export function buildTrack(rootScene, roadTex, grassTex, control = CONTROL, opts
         const off = (left ? 1 : -1) * (ROAD_WIDTH / 2 + 1.5 + d);
         const p = pts[i].clone().addScaledVector(sides[i], off);
         let ok = true;
-        for (let j = 0; j < N; j += 8) {
+        for (let j = 0; j < N; j += 16) {
             const dx = pts[j].x - p.x;
             const dz = pts[j].z - p.z;
             if (dx * dx + dz * dz < (ROAD_WIDTH / 2 + 3) ** 2) {
@@ -194,17 +209,29 @@ export function buildTrack(rootScene, roadTex, grassTex, control = CONTROL, opts
     scene.add(trunk, leaves);
 
     // Street lamps at corners
-    const lampMat = new THREE.MeshBasicMaterial({ color: 0xffb060 });
-    const lampStep = Math.max(160, Math.floor(N / 12));
-    for (let i = 100; i < N && opts.lamps !== false; i += lampStep) {
-        const p = pts[i].clone().addScaledVector(sides[i], -(ROAD_WIDTH / 2 + 1));
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 6), railMat);
-        pole.position.set(p.x, p.y + 3, p.z);
-        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), lampMat);
-        bulb.position.set(p.x, p.y + 6, p.z);
-        const light = new THREE.PointLight(0xffa050, 40, 30, 1.6);
-        light.position.copy(bulb.position);
-        scene.add(pole, bulb, light);
+    // Lamps: no real lights (each PointLight costs every pixel of every lit material).
+    // Emissive bulb + additive fake glow pool on the road instead, all instanced.
+    if (opts.lamps !== false) {
+        const lampStep = Math.max(160, Math.floor(N / 12));
+        const spots = [];
+        for (let i = 100; i < N; i += lampStep) spots.push(i);
+        const poleI = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.08, 0.1, 6, 6), railMat, spots.length);
+        const bulbI = new THREE.InstancedMesh(new THREE.SphereGeometry(0.3, 6, 4), new THREE.MeshBasicMaterial({ color: 0xffb060 }), spots.length);
+        const poolI = new THREE.InstancedMesh(
+            new THREE.CircleGeometry(7, 20).rotateX(-Math.PI / 2),
+            new THREE.MeshBasicMaterial({ map: glowTexture(), color: 0xffa050, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }),
+            spots.length
+        );
+        const q = new THREE.Quaternion();
+        const one = new THREE.Vector3(1, 1, 1);
+        spots.forEach((i, k) => {
+            const p = pts[i].clone().addScaledVector(sides[i], -(ROAD_WIDTH / 2 + 1));
+            m.compose(new THREE.Vector3(p.x, p.y + 3, p.z), q, one); poleI.setMatrixAt(k, m);
+            m.compose(new THREE.Vector3(p.x, p.y + 6, p.z), q, one); bulbI.setMatrixAt(k, m);
+            const c = pts[i].clone().addScaledVector(sides[i], -2);
+            m.compose(new THREE.Vector3(c.x, c.y + 0.05, c.z), q, one); poolI.setMatrixAt(k, m);
+        });
+        scene.add(poleI, bulbI, poolI);
     }
 
     addGate(scene, track, track.startIndex, 'START', false);

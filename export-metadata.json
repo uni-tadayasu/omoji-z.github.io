@@ -1,9 +1,9 @@
 {
   "name": "峠ドライブ",
-  "revisionLabel": "Saved progress",
+  "revisionLabel": "超軽量化と滑らかさの仕上げ",
   "description": "ユーザー所有の参照ブラウザゲームをもとに、車・コース・UIの再現度を高めたレースゲームを制作する。原作の雰囲気を保ち、車の加速、ブレーキ、ハンドリング、路面やコースに応じた挙動を感じられるリアルな走行感をコアにする。",
   "mode": "Universal",
-  "exportDate": "2026-11-02T08:12:53.777Z",
+  "exportDate": "2026-11-03T05:50:20.567Z",
   "rosebudBuiltInSplash": {
     "present": true,
     "version": 1

@@ -12,19 +12,49 @@ import { initUI, showSite, showResult, header, toast } from './ui.js';
 
 // ---------- Renderer / scene ----------
 const container = document.getElementById('game-container');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// Performance: MSAA only on low-DPI screens (high-DPI hides aliasing anyway), capped pixel ratio,
+// and a dynamic resolution scaler that lowers/raises render scale to hold ~60fps.
+const DPR = window.devicePixelRatio || 1;
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 1100);
+const renderer = new THREE.WebGLRenderer({ antialias: DPR < 1.5 && !isMobile, powerPreference: 'high-performance', stencil: false });
+const MAX_SCALE = Math.min(DPR, isMobile ? 1.25 : 1.5);
+const MIN_SCALE = Math.min(0.6, MAX_SCALE);
+let renderScale = MAX_SCALE;
+renderer.setPixelRatio(renderScale);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x0a1020, 40, 260);
-const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.5, 520);
+let resizeT = 0;
 window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+    }, 100);
 });
+// dynamic resolution
+let perfAcc = 0;
+let perfFrames = 0;
+function adaptResolution(rawDt) {
+    perfAcc += rawDt;
+    perfFrames++;
+    if (perfAcc < 1.5) return;
+    const fps = perfFrames / perfAcc;
+    perfAcc = 0;
+    perfFrames = 0;
+    let next = renderScale;
+    if (fps < 50) next = Math.max(MIN_SCALE, renderScale - 0.15);
+    else if (fps > 58 && renderScale < MAX_SCALE) next = Math.min(MAX_SCALE, renderScale + 0.1);
+    if (next !== renderScale) {
+        renderScale = next;
+        renderer.setPixelRatio(renderScale);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+}
 
 const hemi = new THREE.HemisphereLight(0x8899cc, 0x202010, 0.9);
 scene.add(hemi);
@@ -78,14 +108,19 @@ function applyAtmosphere(c) {
 }
 
 // rain particles around the camera
-const RAIN_N = 2500;
+const RAIN_N = isMobile ? 700 : 1400;
 const rainGeo = new THREE.BufferGeometry();
 const rainPos = new Float32Array(RAIN_N * 3);
-for (let i = 0; i < RAIN_N; i++) {
-    rainPos[i * 3] = (Math.random() - 0.5) * 60;
-    rainPos[i * 3 + 1] = Math.random() * 30;
-    rainPos[i * 3 + 2] = (Math.random() - 0.5) * 60;
+// two identical 15m layers stacked -> moving the cloud by 15m and wrapping is seamless
+const HALF = RAIN_N / 2;
+for (let i = 0; i < HALF; i++) {
+    const x = (Math.random() - 0.5) * 60;
+    const y = Math.random() * 15;
+    const z = (Math.random() - 0.5) * 60;
+    rainPos.set([x, y, z], i * 3);
+    rainPos.set([x, y + 15, z], (i + HALF) * 3);
 }
+let rainFall = 0;
 rainGeo.setAttribute('position', new THREE.Float32BufferAttribute(rainPos, 3));
 const rain = new THREE.Points(rainGeo, new THREE.PointsMaterial({ color: 0xaaccff, size: 0.12, transparent: true, opacity: 0.6 }));
 rain.visible = false;
@@ -117,9 +152,25 @@ const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2020 });
 
 function disposeGroup(g) {
     g.traverse(o => {
-        if (o.geometry && o.geometry !== tailGeo) o.geometry.dispose();
-        if (o.material && o.material !== tailMat) o.material.dispose();
+        if (o.geometry && o.geometry !== tailGeo && o.geometry !== headGlowGeo) o.geometry.dispose();
+        if (o.material && o.material !== tailMat && o.material !== headGlowMat) o.material.dispose();
     });
+}
+// rivals get a cheap additive light cone on the road instead of a real SpotLight
+const headGlowGeo = new THREE.PlaneGeometry(5, 14).rotateX(-Math.PI / 2).translate(0, 0.06, 9);
+const headGlowMat = (() => {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createLinearGradient(0, 64, 0, 0);
+    grd.addColorStop(0, 'rgba(255,240,200,0.9)');
+    grd.addColorStop(1, 'rgba(255,240,200,0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.moveTo(12, 64); g.lineTo(20, 64); g.lineTo(32, 0); g.lineTo(0, 0); g.fill();
+    return new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
+})();
+function addHeadGlow(group) {
+    group.add(new THREE.Mesh(headGlowGeo, headGlowMat));
 }
 function addTail(group) {
     for (const sx of [-0.6, 0.6]) {
@@ -253,12 +304,7 @@ function setupRace() {
         const lv = Math.min(1.08, level * (1 - (cpus > 1 ? k * 0.012 : 0)));
         const rival = new RivalCar(rv, track, lane, lv, grip, startS);
         rival.name = names[k % names.length];
-        if (k < 2) {
-            const rivalLight = new THREE.SpotLight(0xfff2d0, course.time === 'day' ? 15 : 80, 70, 0.5, 0.5, 1.2);
-            rivalLight.position.set(0, 0.8, 1.8);
-            rivalLight.target.position.set(0, 0, 20);
-            rival.group.add(rivalLight, rivalLight.target);
-        }
+        addHeadGlow(rival.group);
         addTail(rival.group);
         scene.add(rival.group);
         rivals.push(rival);
@@ -787,14 +833,14 @@ const camLook = new THREE.Vector3();
 function updateCamera(dt) {
     const fx = Math.sin(player.heading);
     const fz = Math.cos(player.heading);
-    let desired;
-    let look;
+    const desired = _desired;
+    const look = _look;
     if (camMode === 0) {
-        desired = new THREE.Vector3(player.x - fx * 7.5, player.y + 2.8, player.z - fz * 7.5);
-        look = new THREE.Vector3(player.x + fx * 4, player.y + 1, player.z + fz * 4);
+        desired.set(player.x - fx * 7.5, player.y + 2.8, player.z - fz * 7.5);
+        look.set(player.x + fx * 4, player.y + 1, player.z + fz * 4);
     } else {
-        desired = new THREE.Vector3(player.x + fx * 0.3, player.y + 1.15, player.z + fz * 0.3);
-        look = new THREE.Vector3(player.x + fx * 10, player.y + 0.9, player.z + fz * 10);
+        desired.set(player.x + fx * 0.3, player.y + 1.15, player.z + fz * 0.3);
+        look.set(player.x + fx * 10, player.y + 0.9, player.z + fz * 10);
     }
     camPos.lerp(desired, camMode === 0 ? Math.min(1, dt * 6) : 1);
     camLook.lerp(look, camMode === 0 ? Math.min(1, dt * 10) : 1);
@@ -809,35 +855,55 @@ function updateCamera(dt) {
     }
     camera.lookAt(camLook);
     const targetFov = 62 + player.speedKmh * 0.06;
-    camera.fov += (targetFov - camera.fov) * 0.05;
-    camera.updateProjectionMatrix();
+    const nf = camera.fov + (targetFov - camera.fov) * 0.05;
+    if (Math.abs(nf - camera.fov) > 0.01) {
+        camera.fov = nf;
+        camera.updateProjectionMatrix();
+    }
 }
+const _desired = new THREE.Vector3();
+const _look = new THREE.Vector3();
 
-function updateHud() {
+// DOM writes only when text actually changes; heavy parts (standings sort, dots) at ~12Hz,
+// gauge canvas redrawn only when the shown values change.
+const hudCache = new Map();
+function setText(el, key, v, html = false) {
+    if (hudCache.get(key) === v) return;
+    hudCache.set(key, v);
+    if (html) el.innerHTML = v; else el.textContent = v;
+}
+let hudSlow = 0;
+let gaugeKey = '';
+function updateHud(dt) {
     if (cfg.mode === 'bonus') {
         const left = Math.max(0, cfg.bonus.time - raceTime);
-        ui.time.textContent = `残り ${left.toFixed(1)}s`;
-        ui.time.style.color = left < 10 ? '#ff5040' : '';
-        ui.best.textContent = `🪙 ${collected.z.toLocaleString()} Z  ⬡ ${collected.metal} M`;
+        setText(ui.time, 't', `残り ${left.toFixed(1)}s`);
+        const red = left < 10 ? '#ff5040' : '';
+        if (ui.time.style.color !== red) ui.time.style.color = red;
+        setText(ui.best, 'b', `🪙 ${collected.z.toLocaleString()} Z  ⬡ ${collected.metal} M`);
     } else {
-        ui.time.textContent = fmt(raceTime);
-        ui.time.style.color = '';
+        setText(ui.time, 't', fmt(Math.floor(raceTime * 100) / 100));
+        if (ui.time.style.color) ui.time.style.color = '';
         const b = save.best[course.idx];
-        ui.best.textContent = b ? 'BEST ' + fmt(b) : '';
+        setText(ui.best, 'b', b ? 'BEST ' + fmt(b) : '');
     }
+    const gk = `${Math.round(player.speedKmh)}|${player.gear}|${Math.round(player.rpm / 150)}`;
+    if (gk !== gaugeKey) { gaugeKey = gk; drawGauge(); }
+    hudSlow -= dt;
+    if (hudSlow > 0) return;
+    hudSlow = 0.08;
     const span = track.finishIndex - track.startIndex;
     const prog = i => THREE.MathUtils.clamp((i - track.startIndex) / span, 0, 1) * 252;
     if (cfg.mode === 'battle') {
         const order = standings();
         const place = order.findIndex(o => o.me) + 1;
-        ui.pos.innerHTML = `${place}<small>${ORD(place).slice(-2)}${order.length > 2 ? ' /' + order.length : ''}</small>`;
-        rivals.forEach((r, k) => { dotFor('r' + k, k === 0 ? '#ffcc00' : '#f08a30').style.top = `${prog(r.index)}px`; });
+        setText(ui.pos, 'p', `${place}<small>${ORD(place).slice(-2)}${order.length > 2 ? ' /' + order.length : ''}</small>`, true);
+        rivals.forEach((r, k) => { dotFor('r' + k, k === 0 ? '#ffcc00' : '#f08a30').style.transform = `translateY(${prog(r.index) | 0}px)`; });
         if (cfg.online) {
-            for (const [key, e] of peers) if (racingPeer(e)) dotFor('p' + key, '#4fd2ff').style.top = `${prog(e.data.idx || 0)}px`;
+            for (const [key, e] of peers) if (racingPeer(e)) dotFor('p' + key, '#4fd2ff').style.transform = `translateY(${prog(e.data.idx || 0) | 0}px)`;
         }
     }
-    dotFor('me', '#fff').style.top = `${prog(player.index)}px`;
-    drawGauge();
+    dotFor('me', '#fff').style.transform = `translateY(${prog(player.index) | 0}px)`;
 }
 
 // menu backdrop: slow orbit over the last course
@@ -859,14 +925,23 @@ initUI({
 });
 
 const timer = new THREE.Timer();
+const noInput = { throttle: false, brake: true, left: false, right: false, handbrake: false };
+let menuAcc = 0;
+// cache wind-up keys (VIP) instead of traversing the car every frame
+let spinners = [];
+let spinOwner = null;
 renderer.setAnimationLoop(time => {
     timer.update(time);
-    const dt = Math.min(0.05, timer.getDelta());
-    const noInput = { throttle: false, brake: true, left: false, right: false, handbrake: false };
+    const rawDt = timer.getDelta();
+    const dt = Math.min(0.05, rawDt);
     const rivalsGo = cfg.mode === 'battle';
 
     if (state === 'menu') {
-        orbit += dt * 0.15;
+        // menu: the site panel covers ~95% of the backdrop, so 12fps is invisible and saves GPU/battery
+        menuAcc += rawDt;
+        if (menuAcc < 1 / 12) return;
+        orbit += Math.min(0.1, menuAcc) * 0.15;
+        menuAcc = 0;
         const p = player.group.position;
         camera.position.set(p.x + Math.sin(orbit) * 9, p.y + 3.5, p.z + Math.cos(orbit) * 9);
         camera.lookAt(p.x, p.y + 0.8, p.z);
@@ -901,20 +976,21 @@ renderer.setAnimationLoop(time => {
             }
         }
         updateCamera(dt);
-        updateHud();
+        updateHud(dt);
+        adaptResolution(rawDt);
     }
     updateCoins(dt);
     publishPresence(dt);
-    // VIP wind-up key spin
-    player.group.traverse(o => { if (o.userData.spin) o.rotation.z += dt * 4; });
+    if (spinOwner !== player) {
+        spinOwner = player;
+        spinners = [];
+        player.group.traverse(o => { if (o.userData.spin) spinners.push(o); });
+    }
+    for (const o of spinners) o.rotation.z += dt * 4;
     if (rain.visible) {
-        rain.position.set(camera.position.x, camera.position.y - 10, camera.position.z);
-        const a = rainGeo.attributes.position.array;
-        for (let i = 1; i < a.length; i += 3) {
-            a[i] -= dt * 25;
-            if (a[i] < 0) a[i] += 30;
-        }
-        rainGeo.attributes.position.needsUpdate = true;
+        // move the whole cloud (no per-vertex CPU work / buffer upload): fall + wrap every 15m
+        rainFall = (rainFall + dt * 25) % 15;
+        rain.position.set(camera.position.x, camera.position.y - 10 - rainFall, camera.position.z);
     }
     updateAudio();
     updatePeers(dt);

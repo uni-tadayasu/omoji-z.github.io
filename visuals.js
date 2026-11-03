@@ -124,13 +124,11 @@ export function makeCarVisual(id, dress, baseModel) {
         holder.add(w);
     }
     if (dress && dress.neon) {
-        const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.9, L * 0.9), new THREE.MeshBasicMaterial({ color: dress.neon, transparent: true, opacity: 0.55 }));
+        // additive plane instead of a PointLight (lights are the most expensive thing per pixel)
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.6, L * 1.1), new THREE.MeshBasicMaterial({ color: dress.neon, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
         glow.rotation.x = -Math.PI / 2;
         glow.position.y = 0.05;
         holder.add(glow);
-        const pl = new THREE.PointLight(dress.neon, 6, 6, 2);
-        pl.position.y = 0.2;
-        holder.add(pl);
     }
     return holder;
 }
